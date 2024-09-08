@@ -1,21 +1,39 @@
-# llama.ttf
+# HarfBuzz WASM PoC
 
-A font containing a large language model and inference engine.
+This is a fun fork of the [llama.ttf](https://github.com/fuglede/llama.ttf).
 
-## What?
+## Prerequisites
 
-A font containing a large language model and inference engine.
+[Install Rust:](https://www.rust-lang.org/tools/install)
 
-## Why?
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
 
-## What?
+[Install wasm-pack:](https://rustwasm.github.io/wasm-pack/installer/)
 
-## Usage
+```bash
+curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+```
 
-Just download [`llama.ttf`](https://github.com/fuglede/llama.ttf/raw/master/llamattf/llama.ttf) and use it like you would any other font, for instance by adding it to `~/.fonts`. Then, use it somewhere where [Harfbuzz](https://github.com/harfbuzz/harfbuzz) is used and built with Wasm support.
+Install fonttools:
 
-The simplest way to do that with this is probably to build [Harfbuzz](https://github.com/harfbuzz/harfbuzz/tree/4cfc6d8e173e800df086d7be078da2e8c5cfca19) with `-Dwasm=enabled`, and build [wasm-micro-runtime](https://github.com/bytecodealliance/wasm-micro-runtime/tree/382d52fc05dbb543dfafb969182104d6c4856c63), then add the resulting shared libraries, `libharfbuzz.so.0.60811.0` and `libiwasm.so` to `LD_PRELOAD` before running a Harfbuzz-based application such as gedit or GIMP; no recompilation of the applications is required.
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip3 install fonttools
+```
 
-## Demo and more info
+Build HarfBuzz and WASM and add `libharfbuzz.so.0` and `libiwasm.so` to the `LD_PRELOAD`:
 
-See [https://fuglede.github.io/llama.ttf/](https://fuglede.github.io/llama.ttf/).
+```bash
+echo 'export LD_PRELOAD="$HOME/Projects/harfbuzz-9.0.0/build/src/libharfbuzz.so.0 $HOME/Projects/wasm-micro-runtime-WAMR-2.1.1/product-mini/platforms/linux/build/libiwasm.so"' >> ~/.bashrc
+```
+
+Build the `wasmpoc.ttf`:
+
+```bash
+make -C wasmpocttf/
+```
+
+Add the font and try it out using an editor of your choice.
