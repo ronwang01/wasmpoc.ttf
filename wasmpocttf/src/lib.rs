@@ -3,6 +3,34 @@ use wasm_bindgen::prelude::*;
 use meval;
 
 pub mod llama2;
+type Ty = f32;
+
+fn inplace_softmax(x: &mut [Ty]) {
+    let max_val = x.iter().fold(Ty::NAN, |acc, &v| v.max(acc));
+    let mut denom = 0 as Ty;
+    for v in x.iter_mut() {
+        *v = (*v - max_val).exp();
+        denom += *v;
+    }
+
+    x.iter_mut().for_each(|v| *v /= denom);
+}
+
+fn cdf_sample(probs: &[Ty]) -> usize {
+    // getrandom
+    // let mut small_rng = SmallRng::from_entropy();
+    let mut buf = [0u8; 32];
+    let result = getrandom::getrandom(&mut buf);
+    let r = buf[0] as Ty;
+    let mut cdf = 0 as Ty;
+    for (idx, p) in probs.iter().enumerate() {
+        cdf += *p;
+        if r < cdf {
+            return idx;
+        }
+    }
+    probs.len() - 1
+}
 
 fn next_n_words(s: &str, seq_len: usize) -> String {
     let config = llama2::Config::from_file();
@@ -21,6 +49,9 @@ fn next_n_words(s: &str, seq_len: usize) -> String {
         llama2::LamaExecuter::step(&mut weights, token, pos, &config, &mut state);
         pos += 1;
     }
+
+    let temperature = 0.5 as Ty;
+    let mut probs = vec![0 as Ty; config.vocab_size];
     let initial_tokens = tokens.len();
     tokens = vec![];
     // Here we're just running with temperature 0, so we get deterministic outputs. Some other fun
@@ -28,13 +59,23 @@ fn next_n_words(s: &str, seq_len: usize) -> String {
     // that last token, please give me another one". Or a way of specifying a seed, which could
     // also just be done in the input text.
     while pos < seq_len + initial_tokens {
-        let next = state
-            .logits
-            .iter()
-            .enumerate()
-            .max_by(|(_, a), (_, b)| a.total_cmp(b))
-            .map(|(index, _)| index)
-            .unwrap();
+        let next =if temperature == 0 as Ty {
+            state
+                .logits
+                .iter()
+                .enumerate()
+                .max_by(|(_, a), (_, b)| a.total_cmp(b))
+                .map(|(index, _)| index)
+                .unwrap()
+        } else {
+            state
+                .logits
+                .iter()
+                .zip(probs.iter_mut())
+                .for_each(|(logit, p)| *p = logit / temperature);
+            inplace_softmax(&mut probs);
+            cdf_sample(&probs)
+        };
         tokens.push(next);
         token = next;
         llama2::LamaExecuter::step(&mut weights, token, pos, &config, &mut state);
@@ -67,7 +108,7 @@ pub fn shape(
     // cf. the comment above, just encoding actual text we get into tokens instead, we get
     // text generation for any string. This is fine enough for a demo though.
     let res_str = if str_buf.starts_with(
-        "Once upon a time......................................................................",
+        "Once upon a time.",
     ) {
         let count = str_buf.chars().filter(|c| *c == '.').count() as usize;
         let s = format!("{}", next_n_words(&str_buf, count + 5 - 70));
